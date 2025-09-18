@@ -13,13 +13,14 @@ app.use(cors({
   allowedHeaders: ['Content-Type', 'Authorization']
 }));
 app.set('trust proxy', true);
-app.use('/docs', swaggerUi.serve, (req, res, next) => {
-  const host = req.get('host');           // may or may not include port
-  let protocol = req.protocol;          // http or https
 
+// Swagger UI with dynamic server URL
+app.use('/docs', swaggerUi.serve, (req, res, next) => {
+  const host = req.get('host');
+  let protocol = req.protocol;
   const actualPort = req.socket.localPort;
   const hasPort = host.includes(':');
-  
+
   const needsPort =
     !hasPort &&
     ((protocol === 'http' && actualPort !== 80) ||
@@ -29,13 +30,13 @@ app.use('/docs', swaggerUi.serve, (req, res, next) => {
 
   const dynamicSpec = {
     ...swaggerSpec,
-    servers: [
-      {
-        url: `${protocol}://${fullHost}`,
-      },
-    ],
+    servers: [{ url: `${protocol}://${fullHost}` }],
   };
-  swaggerUi.setup(dynamicSpec)(req, res, next);
+  swaggerUi.setup(dynamicSpec, {
+    swaggerOptions: {
+      persistAuthorization: true,
+    },
+  })(req, res, next);
 });
 
 // Parse JSON request body
@@ -46,10 +47,12 @@ app.use('/', routes);
 
 // Error handling middleware
 app.use((err, req, res, next) => {
+  // eslint-disable-next-line no-console
   console.error(err.stack);
-  res.status(500).json({
+  const status = err.status || 500;
+  res.status(status).json({
     status: 'error',
-    message: 'Internal Server Error',
+    message: err.message || 'Internal Server Error',
   });
 });
 
