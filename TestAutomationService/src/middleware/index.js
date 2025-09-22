@@ -1,4 +1,5 @@
-// This file will export middleware as the application grows
+const logger = require('./logger');
+
 module.exports = {
-  // Add your middleware here
+  logger,
 };
