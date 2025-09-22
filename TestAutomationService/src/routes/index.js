@@ -1,13 +1,18 @@
 const express = require('express');
 const healthController = require('../controllers/health');
+const testSuitesRouter = require('./testSuites');
+const testResultsRouter = require('./testResults');
+const reportsRouter = require('./reports');
+const webhooksRouter = require('./webhooks');
 
 const router = express.Router();
-// Health endpoint
 
+// Health endpoint
 /**
  * @swagger
  * /:
  *   get:
+ *     tags: [Health]
  *     summary: Health endpoint
  *     responses:
  *       200:
@@ -31,5 +36,11 @@ const router = express.Router();
  *                   example: development
  */
 router.get('/', healthController.check.bind(healthController));
+
+// Mount API routers
+router.use('/api/test-suites', testSuitesRouter);
+router.use('/api/test-results', testResultsRouter);
+router.use('/api/reports', reportsRouter);
+router.use('/api/webhooks', webhooksRouter);
 
 module.exports = router;
