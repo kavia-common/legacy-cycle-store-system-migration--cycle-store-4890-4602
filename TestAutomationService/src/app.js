@@ -13,13 +13,15 @@ app.use(cors({
   allowedHeaders: ['Content-Type', 'Authorization']
 }));
 app.set('trust proxy', true);
+
+// Swagger UI with dynamic server
 app.use('/docs', swaggerUi.serve, (req, res, next) => {
-  const host = req.get('host');           // may or may not include port
-  let protocol = req.protocol;          // http or https
+  const host = req.get('host');
+  let protocol = req.protocol;
 
   const actualPort = req.socket.localPort;
   const hasPort = host.includes(':');
-  
+
   const needsPort =
     !hasPort &&
     ((protocol === 'http' && actualPort !== 80) ||
@@ -30,25 +32,33 @@ app.use('/docs', swaggerUi.serve, (req, res, next) => {
   const dynamicSpec = {
     ...swaggerSpec,
     servers: [
-      {
-        url: `${protocol}://${fullHost}`,
-      },
+      { url: `${protocol}://${fullHost}` },
     ],
   };
   swaggerUi.setup(dynamicSpec)(req, res, next);
 });
 
-// Parse JSON request body
-app.use(express.json());
+// Body parser
+app.use(express.json({ limit: '2mb' }));
 
-// Mount routes
+// Very light auth placeholder (replace with real OAuth2 introspection/JWT)
+app.use((req, res, next) => {
+  // In production, validate Authorization header and populate req.user
+  req.user = { id: 'system', roles: ['admin', 'tester', 'viewer'] };
+  next();
+});
+
+// Routes
 app.use('/', routes);
 
 // Error handling middleware
+// eslint-disable-next-line no-unused-vars
 app.use((err, req, res, next) => {
+  // Centralized error handler
+  // Prefer controllers to convert to structured error, this is a final fallback
   console.error(err.stack);
   res.status(500).json({
-    status: 'error',
+    code: '500',
     message: 'Internal Server Error',
   });
 });
