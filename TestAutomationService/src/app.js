@@ -1,20 +1,41 @@
-const cors = require('cors');
 const express = require('express');
 const routes = require('./routes');
 const swaggerUi = require('swagger-ui-express');
 const swaggerSpec = require('../swagger');
+const { 
+  authenticate, 
+  authorize, 
+  optionalAuth, 
+  rateLimit, 
+  requestLogger, 
+  errorHandler, 
+  cors,
+  passport 
+} = require('./middleware');
 
 // Initialize express app
 const app = express();
 
-app.use(cors({
-  origin: '*',
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization']
-}));
+// Trust proxy for accurate IP addresses
 app.set('trust proxy', true);
 
-// Swagger UI with dynamic server
+// Initialize Passport
+app.use(passport.initialize());
+
+// CORS middleware
+app.use(cors);
+
+// Request logging middleware
+app.use(requestLogger);
+
+// Rate limiting
+app.use(rateLimit(15 * 60 * 1000, 100)); // 100 requests per 15 minutes
+
+// Body parser
+app.use(express.json({ limit: '2mb' }));
+app.use(express.urlencoded({ extended: true }));
+
+// Swagger UI with dynamic server and authentication
 app.use('/docs', swaggerUi.serve, (req, res, next) => {
   const host = req.get('host');
   let protocol = req.protocol;
@@ -38,29 +59,49 @@ app.use('/docs', swaggerUi.serve, (req, res, next) => {
   swaggerUi.setup(dynamicSpec)(req, res, next);
 });
 
-// Body parser
-app.use(express.json({ limit: '2mb' }));
+// OAuth2 authentication routes
+app.get('/auth/oauth2', passport.authenticate('oauth2'));
+app.get('/auth/oauth2/callback', 
+  passport.authenticate('oauth2', { session: false }),
+  (req, res) => {
+    // Generate JWT token for the authenticated user
+    const { generateToken } = require('./middleware');
+    const token = generateToken(req.user);
+    
+    // In production, you might redirect to a frontend app with the token
+    res.json({
+      message: 'Authentication successful',
+      token,
+      user: {
+        id: req.user.id,
+        roles: req.user.roles
+      }
+    });
+  }
+);
 
-// Very light auth placeholder (replace with real OAuth2 introspection/JWT)
-app.use((req, res, next) => {
-  // In production, validate Authorization header and populate req.user
-  req.user = { id: 'system', roles: ['admin', 'tester', 'viewer'] };
-  next();
-});
-
-// Routes
-app.use('/', routes);
-
-// Error handling middleware
-// eslint-disable-next-line no-unused-vars
-app.use((err, req, res, next) => {
-  // Centralized error handler
-  // Prefer controllers to convert to structured error, this is a final fallback
-  console.error(err.stack);
-  res.status(500).json({
-    code: '500',
-    message: 'Internal Server Error',
+// Health check route (no authentication required)
+app.get('/health', (req, res) => {
+  res.json({
+    status: 'ok',
+    message: 'Test Automation Service is healthy',
+    timestamp: new Date().toISOString(),
+    environment: process.env.NODE_ENV || 'development',
+    version: require('../package.json').version
   });
 });
+
+// Protected routes with authentication
+app.use('/', optionalAuth, routes);
+
+// Apply authentication to API routes that need it
+app.use('/test-suites', authenticate);
+app.use('/test-results', authenticate);
+app.use('/reports', authenticate);
+app.use('/webhooks', authenticate, authorize(['admin', 'tester']));
+app.use('/audit', authenticate, authorize(['admin']));
+
+// Error handling middleware (must be last)
+app.use(errorHandler);
 
 module.exports = app;

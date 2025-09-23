@@ -8,8 +8,8 @@ describe('Test Automation Service - Health & List', () => {
     expect(res.body).toHaveProperty('status');
   });
 
-  it('GET /api/test-suites should be protected or return 200 with token (implementation dependent)', async () => {
-    const res = await request(app).get('/api/test-suites');
+  it('GET /test-suites should be protected or return 200 with token (implementation dependent)', async () => {
+    const res = await request(app).get('/test-suites');
     expect([200, 401, 403]).toContain(res.status);
   });
 });
